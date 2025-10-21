@@ -1,0 +1,75 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: rohan-rest-app-db
+    environment:
+      POSTGRES_DB: students_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d students_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - app-network
+
+  # REST API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rohan-rest-app-api
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-0}
+      HOST: 0.0.0.0
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/students_db
+    ports:
+      - "${API_PORT:-5000}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; sock = socket.socket(); sock.settimeout(5); result = sock.connect_ex(('localhost', 5000)); sock.close(); exit(0 if result == 0 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Database Migration Service (runs once)
+  migration:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rohan-rest-app-migration
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/students_db
+      FLASK_ENV: ${FLASK_ENV:-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["python", "migrate.py"]
+    networks:
+      - app-network
+    profiles:
+      - migration
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

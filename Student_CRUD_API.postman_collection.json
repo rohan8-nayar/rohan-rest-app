@@ -1,0 +1,326 @@
+{
+	"info": {
+		"_postman_id": "student-crud-api",
+		"name": "Student CRUD REST API",
+		"description": "Complete REST API for managing student records with full CRUD operations",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "api_version",
+			"value": "v1",
+			"type": "string"
+		},
+		{
+			"key": "student_id",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/healthcheck",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"healthcheck"
+					]
+				},
+				"description": "Check API health status"
+			},
+			"response": []
+		},
+		{
+			"name": "Create Student",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"age\": 20,\n  \"grade\": \"A\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students"
+					]
+				},
+				"description": "Create a new student record"
+			},
+			"response": []
+		},
+		{
+			"name": "Get All Students",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students"
+					]
+				},
+				"description": "Retrieve all students with pagination"
+			},
+			"response": []
+		},
+		{
+			"name": "Get All Students (Paginated)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students?page=1&per_page=5",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "per_page",
+							"value": "5"
+						}
+					]
+				},
+				"description": "Retrieve students with custom pagination"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Student by ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students/{{student_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students",
+						"{{student_id}}"
+					]
+				},
+				"description": "Retrieve a specific student by ID"
+			},
+			"response": []
+		},
+		{
+			"name": "Update Student",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Jane\",\n  \"age\": 21,\n  \"grade\": \"A+\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students/{{student_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students",
+						"{{student_id}}"
+					]
+				},
+				"description": "Update an existing student's information"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Student",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students/{{student_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students",
+						"{{student_id}}"
+					]
+				},
+				"description": "Delete a student record"
+			},
+			"response": []
+		},
+		{
+			"name": "Create Student - Invalid Data",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"John\",\n  \"email\": \"john.doe@example.com\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students"
+					]
+				},
+				"description": "Test creating student with missing required fields (should return 400)"
+			},
+			"response": []
+		},
+		{
+			"name": "Create Student - Duplicate Email",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Smith\",\n  \"email\": \"john.doe@example.com\",\n  \"age\": 22,\n  \"grade\": \"B\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students"
+					]
+				},
+				"description": "Test creating student with duplicate email (should return 409)"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Non-existent Student",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students/999",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students",
+						"999"
+					]
+				},
+				"description": "Test retrieving non-existent student (should return 404)"
+			},
+			"response": []
+		},
+		{
+			"name": "Update Non-existent Student",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"first_name\": \"Updated\",\n  \"age\": 25\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students/999",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students",
+						"999"
+					]
+				},
+				"description": "Test updating non-existent student (should return 404)"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Non-existent Student",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/api/{{api_version}}/students/999",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"{{api_version}}",
+						"students",
+						"999"
+					]
+				},
+				"description": "Test deleting non-existent student (should return 404)"
+			},
+			"response": []
+		}
+	]
+}
