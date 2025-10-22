@@ -13,7 +13,7 @@ ACTIVATE = . $(VENV)/bin/activate
 # Application configuration
 APP_NAME := rohan-rest-app
 # For Docker Hub, use just your username (not the full URL)
-REGISTRY := rohannayar
+REGISTRY := rohan8-nayar
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0.0")
 DEFAULT_VERSION := 1.0.0
 
