@@ -4,7 +4,7 @@ name: CI Pipeline
 # Only when code files are modified (not docs, configs, etc.)
 on:
   push:
-    branches: [ main, actions ]
+    branches: [ main]
     paths:
       - '**.py'           # Python files
       - 'requirements*.txt' # Requirements files
