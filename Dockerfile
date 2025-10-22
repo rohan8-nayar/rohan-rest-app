@@ -59,5 +59,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import socket; sock = socket.socket(); sock.settimeout(5); result = sock.connect_ex(('localhost', int('$PORT'))); sock.close(); exit(0 if result == 0 else 1)"
 
 # Use ENTRYPOINT + CMD for better flexibility
-ENTRYPOINT ["python"]
-CMD ["app.py"]
+ENTRYPOINT ["python", "app.py"]
