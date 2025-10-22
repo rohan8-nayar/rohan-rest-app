@@ -379,6 +379,11 @@ clean-compose: ## Clean up docker-compose resources
 	docker-compose rm -f
 	docker volume prune -f
 
+.PHONY: compose-push
+compose-push: ## Push all services to Docker Hub
+	@echo "Pushing API image to Docker Hub..."
+	docker-compose push api
+
 .PHONY: dev-setup
 dev-setup: ## Complete development setup
 	@echo "Setting up development environment..."

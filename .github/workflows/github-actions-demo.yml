@@ -1,8 +1,22 @@
 name: GitHub Actions Demo
 run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
-on: [push]
+on: 
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - README.md
+      - docs/** 
+  pull_request:
+    branches:
+      - actions
+      - test
+    paths-ignore:
+      - README.md
+      - docs/** 
+  
 jobs:
-  Explore-GitHub-Actions:
+  ci-pipeline:
     runs-on: self-hosted
     steps:
       - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
@@ -15,4 +29,15 @@ jobs:
       - name: List files in the repository
         run: |
           ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+      - name: build step
+        run: echo "Building the application..."
+        run: make build-api
+      - name: test step
+        run: echo "Running tests..."
+        run: make test-api
+      - name: lint step
+        run: echo "Linting the code..."
+        run: make lint-api
+      - name: docker-push step
+        run: echo "pushing into Docker Hub..."
+        run: make compose-push
