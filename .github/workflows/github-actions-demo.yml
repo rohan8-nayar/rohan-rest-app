@@ -4,18 +4,19 @@ on:
   push:
     branches:
       - main
+      - actions
     paths-ignore:
-      - README.md
-      - docs/** 
+      - "README.md"
+      - "docs/**"
   pull_request:
     branches:
       - actions
       - test
       - main
     paths-ignore:
-      - README.md
-      - docs/** 
-    workflow_dispatch:
+      - "README.md" 
+      - "docs/**"
+  workflow_dispatch:
     inputs:
       environment:
         description: "Environment to deploy to"
@@ -29,35 +30,71 @@ on:
         description: "Version tag to deploy"
         required: false
         default: "latest"
-  
+
 jobs:
   ci-pipeline:
     runs-on: self-hosted
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: student_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/student_db
+      FLASK_ENV: testing
+      CI: true
+      
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
-        uses: actions/checkout@v5
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+          
+      - name: Install system dependencies
         run: |
-          ls ${{ github.workspace }}
-      - name: build step
+          make ci-deps
+          
+      - name: Install Python dependencies
         run: |
-          echo "Building the application..."
-          make setup
-          make build-api
-      - name: test step
+          make ci-install
+          
+      - name: Setup database
         run: |
-          echo "Running tests..."
+          make ci-setup-db
+          
+      - name: Code linting
+        run: |
+          make lint
+          
+      - name: Run tests
+        run: |
           make test
-      - name: lint step
+          
+      - name: Build Docker image
         run: |
-          echo "Linting the code..."
-          make lint-api
-      - name: docker-push step
+          make docker-build
+          
+      - name: Docker build and push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'docker.io' }}
         run: |
-          echo "Pushing into Docker Hub..."
-          make compose-push
+          echo "Building and pushing Docker image..."
+          make docker-push
+          
+      - run: echo "🍏 This job's status is ${{ job.status }}."

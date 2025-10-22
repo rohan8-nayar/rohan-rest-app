@@ -5,7 +5,13 @@ PYTHON = python3
 PIP = pip3
 FLASK = flask
 VENV = venv
-ACTIVATE = . $(VENV)/bin/activate
+
+# Conditional activation for CI vs local development
+ifdef CI
+    ACTIVATE =
+else
+    ACTIVATE = . $(VENV)/bin/activate &&
+endif
 
 # Application configuration
 APP_NAME := rohan-rest-app
@@ -61,6 +67,11 @@ help:
 	@echo "  make deploy          - Build and push to registry"
 	@echo "  make all            - Run all checks and build"
 	@echo ""
+	@echo "CI/CD:"
+	@echo "  make ci-deps         - Install system dependencies for CI"
+	@echo "  make ci-install      - Install Python dependencies for CI"
+	@echo "  make ci-setup-db     - Setup database for CI"
+	@echo ""
 	@echo "Docker Compose Operations:"
 	@echo "  make compose-build   - Build all services with docker-compose"
 	@echo "  make start-db        - Start only the database service"
@@ -89,13 +100,13 @@ setup:
 	@echo "Setting up virtual environment..."
 	$(PYTHON) -m venv $(VENV)
 	$(ACTIVATE) && $(PIP) install --upgrade pip
-	$(ACTIVATE) && $(PIP) install -r requirements.txt
+	$(ACTIVATE) && $(PIP) install -r requirements-dev.txt
 	@echo "Setup complete! Activate with: source $(VENV)/bin/activate"
 
 # Install dependencies
 .PHONY: install
 install:
-	$(ACTIVATE) && $(PIP) install -r requirements.txt
+	$(ACTIVATE) && $(PIP) install -r requirements-dev.txt
 
 # Run the Flask application
 .PHONY: run
@@ -290,6 +301,21 @@ deploy: docker-build docker-push ## Build and push to registry
 
 .PHONY: all
 all: lint test docker-build ## Run all checks and build
+
+# CI/CD targets
+.PHONY: ci-deps
+ci-deps: ## Install system dependencies for CI environment
+	sudo apt-get update
+	sudo apt-get install -y postgresql-client libpq-dev gcc python3-dev
+
+.PHONY: ci-install
+ci-install: ## Install CI dependencies (uses requirements.txt instead of requirements-dev.txt)
+	$(PYTHON) -m pip install --upgrade pip
+	$(PYTHON) -m pip install -r requirements.txt
+
+.PHONY: ci-setup-db
+ci-setup-db: ## Setup database for CI environment
+	$(PYTHON) migrate.py
 
 # Docker Compose targets
 .PHONY: compose-build
