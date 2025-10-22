@@ -7,11 +7,8 @@ FLASK = flask
 VENV = venv
 
 # Conditional activation for CI vs local development
-ifdef CI
-    ACTIVATE =
-else
-    ACTIVATE = . $(VENV)/bin/activate &&
-endif
+ACTIVATE = . $(VENV)/bin/activate &&
+
 
 # Application configuration
 APP_NAME := rohan-rest-app
