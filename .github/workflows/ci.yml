@@ -36,8 +36,8 @@ on:
         - production
 
 env:
-  # Docker registry configuration
-  REGISTRY: docker.io  # Use Docker Hub
+  # Docker registry configuration - aligned with Makefile
+  REGISTRY: rohannayar
   IMAGE_NAME: rohan-rest-app
   
 jobs:
@@ -55,6 +55,10 @@ jobs:
         echo "🏗️ Building API environment..."
         # Install system dependencies if needed
         make setup
+        
+    - name: Build Docker Image
+      run: |
+        echo "🐳 Building Docker image..."
         make docker-build
       
     # Stage 2: Run Tests
@@ -82,13 +86,14 @@ jobs:
         
     # Docker Hub Login
     - name: Login to Docker Hub
+      if: success()  # Only login if previous steps succeeded
       uses: docker/login-action@v3
       with:
-        registry: docker.io
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
         
     - name: Docker Push using Make
+      if: success()  # Only push if login succeeded
       run: |
         echo "📤 Pushing Docker image..."
         make docker-tag
@@ -104,4 +109,5 @@ jobs:
       if: success()
       run: |
         echo "✅ CI Pipeline completed successfully!"
-        echo "🏷️ Tags pushed: ${{ steps.meta.outputs.tags }}"
+        echo "🏷️ Image pushed: ${REGISTRY}/${IMAGE_NAME}:$(git rev-parse --short HEAD)"
+        echo "📍 Registry: Docker Hub"
