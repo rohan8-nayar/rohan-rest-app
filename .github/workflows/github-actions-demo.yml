@@ -47,6 +47,7 @@ jobs:
       - name: build step
         run: |
           echo "Building the application..."
+          make setup
           make build-api
       - name: test step
         run: |
