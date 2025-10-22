@@ -49,30 +49,27 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Set up Python 3.13
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.13'
+    # - name: Set up Python 3.13
+    #   uses: actions/setup-python@v4
+    #   with:
+    #     python-version: '3.13'
         
-    - name: Cache Python dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/pip
-          venv
-        key: ${{ runner.os }}-python-3.13-${{ hashFiles('requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-python-3.13-
+    # - name: Cache Python dependencies
+    #   uses: actions/cache@v3
+    #   with:
+    #     path: |
+    #       ~/.cache/pip
+    #       venv
+    #     key: ${{ runner.os }}-python-3.13-${{ hashFiles('requirements*.txt') }}
+    #     restore-keys: |
+    #       ${{ runner.os }}-python-3.13-
     
     # Stage 1: Build API (Setup environment)
     - name: Build API - Setup Environment
       run: |
         echo "🏗️ Building API environment..."
         # Install system dependencies if needed
-        python3 -m venv venv || true
-        source venv/bin/activate
-        pip install --upgrade pip
-        pip install -r requirements-dev.txt
+        make setup
       
     # Stage 2: Run Tests
     - name: Run Tests

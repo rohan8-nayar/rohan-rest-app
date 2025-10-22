@@ -7,7 +7,7 @@ FLASK = flask
 VENV = venv
 
 # Conditional activation for CI vs local development
-ACTIVATE = . $(VENV)/bin/activate &&
+ACTIVATE = . $(VENV)/bin/activate
 
 
 # Application configuration
@@ -97,9 +97,9 @@ setup:
 	@echo "Setting up virtual environment..."
 	$(PYTHON) -m venv $(VENV)
 	@echo "Upgrading pip..."
-	$(ACTIVATE) $(PIP) install --upgrade pip
+	$(ACTIVATE) && $(PIP) install --upgrade pip
 	@echo "Installing dependencies..."
-	$(ACTIVATE) $(PIP) install -r requirements-dev.txt
+	$(ACTIVATE) && $(PIP) install -r requirements-dev.txt
 	@echo "Setup complete! Activate with: source $(VENV)/bin/activate"
 
 # Install dependencies
