@@ -41,42 +41,26 @@ jobs:
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
-        
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          cache: 'pip'
           
-      - name: Start services with Docker Compose
+      - name: setup CI environment
         run: |
-          make start-db
+          make setup
           
-      - name: Install system dependencies
-        run: |
-          make ci-deps
-          
-      - name: Install Python dependencies
-        run: |
-          make ci-install
-          
-      - name: Setup database
-        run: |
-          make run-migrations
-          
+      
+  
       - name: Code linting
         run: |
           make lint
-          
       - name: Run tests
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/students_db
         run: |
           make test
           
-      - name: Build Docker image
+      - name: build
         run: |
-          make docker-build
+          make compose-build 
+      - name: start services
+        run: |
+          make start-all 
           
       - name: Stop services
         if: always()
