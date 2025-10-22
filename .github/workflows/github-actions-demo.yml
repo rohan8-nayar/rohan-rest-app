@@ -30,14 +30,18 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - name: build step
-        run: echo "Building the application..."
-        run: make build-api
+        run: |
+          echo "Building the application..."
+          make build-api
       - name: test step
-        run: echo "Running tests..."
-        run: make test-api
+        run: |
+          echo "Running tests..."
+          make test-api
       - name: lint step
-        run: echo "Linting the code..."
-        run: make lint-api
+        run: |
+          echo "Linting the code..."
+          make lint-api
       - name: docker-push step
-        run: echo "pushing into Docker Hub..."
-        run: make compose-push
+        run: |
+          echo "Pushing into Docker Hub..."
+          make compose-push
