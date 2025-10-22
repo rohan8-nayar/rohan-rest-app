@@ -12,7 +12,7 @@ ACTIVATE = . $(VENV)/bin/activate
 
 # Application configuration
 APP_NAME := rohan-rest-app
-REGISTRY := your-registry.com  # Change this to your registry
+REGISTRY := https://hub.docker.com/u/rohannayar
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0.0")
 DEFAULT_VERSION := 1.0.0
 
