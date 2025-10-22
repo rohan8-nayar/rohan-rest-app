@@ -51,7 +51,7 @@ jobs:
       - name: test step
         run: |
           echo "Running tests..."
-          make test-api
+          make test
       - name: lint step
         run: |
           echo "Linting the code..."
