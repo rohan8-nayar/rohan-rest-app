@@ -99,8 +99,8 @@ help:
 setup:
 	@echo "Setting up virtual environment..."
 	$(PYTHON) -m venv $(VENV)
-	$(ACTIVATE) && $(PIP) install --upgrade pip
-	$(ACTIVATE) && $(PIP) install -r requirements-dev.txt
+	$(ACTIVATE) $(PIP) install --upgrade pip
+	$(ACTIVATE) $(PIP) install -r requirements-dev.txt
 	@echo "Setup complete! Activate with: source $(VENV)/bin/activate"
 
 # Install dependencies
