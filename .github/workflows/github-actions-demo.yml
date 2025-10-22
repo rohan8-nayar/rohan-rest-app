@@ -11,6 +11,7 @@ on:
     branches:
       - actions
       - test
+      - main
     paths-ignore:
       - README.md
       - docs/** 
