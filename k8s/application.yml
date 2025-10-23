@@ -1,0 +1,51 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: students-api
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: rohan-rest-api
+  namespace: students-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rohan-rest-api
+  template:
+    metadata:
+      labels:
+        app: rohan-rest-api
+    spec:
+      nodeSelector:
+        type: application
+      containers:
+      - name: rohan-rest-api
+        image: rohan-rest-app:622de0e
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        env:
+        - name: FLASK_ENV
+          value: production
+        - name: DATABASE_URL
+          value: "sqlite:///:memory:"  # Use in-memory SQLite for testing, or add PostgreSQL service
+        - name: HOST
+          value: "0.0.0.0"
+        - name: PORT
+          value: "5000"
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rohan-rest-api-service
+  namespace: students-api
+spec:
+  selector:
+    app: rohan-rest-api
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP

@@ -337,6 +337,13 @@ start-db: ## Start only the database service
 stop-db: ## Stop the database service
 	docker-compose stop postgres
 
+.PHONY: start-nginx
+start-nginx: ## Start the Nginx service
+	@echo "Starting Nginx service..."
+	docker-compose up -d nginx
+	@echo "Nginx started!"	
+
+
 .PHONY: run-migrations
 run-migrations: ## Run database migrations
 	@echo "Running database migrations..."
@@ -356,6 +363,7 @@ start-api: start-db run-migrations build-api ## Start the complete application (
 	@echo "Starting API service..."
 	docker-compose up -d api
 	@echo "Application started! API available at http://localhost:5000"
+	$(MAKE) start-nginx
 
 .PHONY: start-all
 start-all: start-api ## Alias for start-api (starts everything)

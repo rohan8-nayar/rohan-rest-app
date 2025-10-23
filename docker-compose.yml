@@ -26,15 +26,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rohan-rest-app-api
+    deploy:
+      replicas: 2
     environment:
       FLASK_ENV: ${FLASK_ENV:-production}
       FLASK_DEBUG: ${FLASK_DEBUG:-0}
       HOST: 0.0.0.0
       PORT: 5000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/students_db
-    ports:
-      - "${API_PORT:-5000}:5000"
+    expose:
+      - "5000"
+    # ports:
+    #   - "${API_PORT:-5000}:5000"
+    #   - "${API_PORT:-5001}:5001"
+      # If you want to run multiple replicas, use a different published port for each or use a load balancer.
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,7 +52,19 @@ services:
     networks:
       - app-network
     restart: unless-stopped
-
+  nginx:
+    image: nginx:latest
+    container_name: rohan-rest-app-nginx
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - app-network
+    restart: unless-stopped
   # Database Migration Service (runs once)
   migration:
     build:
