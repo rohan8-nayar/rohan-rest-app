@@ -83,9 +83,14 @@ spec:
       - name: vault
         image: hashicorp/vault:1.15.4
         imagePullPolicy: IfNotPresent
-        args:
-        - server
-        - -config=/vault/config/vault.hcl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Kill any zombie processes before starting
+          pkill -9 vault 2>/dev/null || true
+          # Start Vault server
+          vault server -config=/vault/config/vault.hcl
         env:
         - name: VAULT_ADDR
           value: "http://127.0.0.1:8200"
@@ -102,28 +107,47 @@ spec:
         - containerPort: 8201
           name: internal
           protocol: TCP
+        # Lifecycle hooks for graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                # Gracefully shutdown Vault
+                kill -TERM $(pidof vault) 2>/dev/null || true
+                sleep 5
         volumeMounts:
         - name: vault-config
           mountPath: /vault/config
         - name: vault-data
           mountPath: /vault/data
-        # Readiness probe
-        readinessProbe:
+        # Startup probe - give Vault time to start before other probes
+        startupProbe:
           httpGet:
-            path: /v1/sys/health?standbyok=true
+            path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
             port: 8200
             scheme: HTTP
-          initialDelaySeconds: 10
+          initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
-          failureThreshold: 3
-        # Liveness probe
-        livenessProbe:
+          failureThreshold: 30  # 30 * 5 = 150 seconds to start
+        # Readiness probe - don't send traffic if not ready
+        readinessProbe:
           httpGet:
-            path: /v1/sys/health?standbyok=true
+            path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
             port: 8200
             scheme: HTTP
-          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        # Liveness probe - restart if dead (but allow sealed/uninitialized states)
+        livenessProbe:
+          httpGet:
+            path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
+            port: 8200
+            scheme: HTTP
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3

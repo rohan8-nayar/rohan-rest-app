@@ -55,13 +55,35 @@ echo ""
 
 # Wait for Vault pod to be ready
 echo "⏳ Waiting for Vault pod to be ready..."
-kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s
+if ! kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s; then
+    echo -e "${RED}❌ Vault pod failed to become ready${NC}"
+    echo ""
+    echo "Common issues:"
+    echo "1. Port 8200 already in use - Run: bash fix-vault.sh"
+    echo "2. Check logs: kubectl logs -n vault -l app=vault"
+    exit 1
+fi
 echo -e "${GREEN}✅ Vault pod is ready${NC}"
 echo ""
+
+# Check if Vault process is actually running
+VAULT_POD=$(kubectl get pod -n vault -l app=vault -o jsonpath='{.items[0].metadata.name}')
+if ! kubectl exec -n vault "$VAULT_POD" -- vault status &>/dev/null; then
+    echo -e "${YELLOW}⚠️  Vault process may not be running properly${NC}"
+    echo "Checking logs..."
+    kubectl logs -n vault "$VAULT_POD" --tail=20
+    echo ""
+    echo -e "${RED}If you see 'address already in use', run: bash fix-vault.sh${NC}"
+    exit 1
+fi
 
 # Step 3: Initialize Vault
 echo "🔑 Step 3: Initializing Vault..."
 VAULT_POD=$(kubectl get pod -n vault -l app=vault -o jsonpath='{.items[0].metadata.name}')
+
+# Give Vault a moment to fully start
+echo "Waiting for Vault to be fully ready..."
+sleep 10
 
 # Check if Vault is already initialized
 INIT_STATUS=$(kubectl exec -n vault "$VAULT_POD" -- vault status -format=json 2>/dev/null | jq -r '.initialized' || echo "false")
