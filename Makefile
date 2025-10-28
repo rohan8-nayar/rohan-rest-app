@@ -5,11 +5,15 @@ PYTHON = python3
 PIP = pip3
 FLASK = flask
 VENV = venv
+
+# Conditional activation for CI vs local development
 ACTIVATE = . $(VENV)/bin/activate
+
 
 # Application configuration
 APP_NAME := rohan-rest-app
-REGISTRY := your-registry.com  # Change this to your registry
+# For Docker Hub, use just your username (not the full URL)
+REGISTRY := rohannayar
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0.0")
 DEFAULT_VERSION := 1.0.0
 
@@ -61,6 +65,11 @@ help:
 	@echo "  make deploy          - Build and push to registry"
 	@echo "  make all            - Run all checks and build"
 	@echo ""
+	@echo "CI/CD:"
+	@echo "  make ci-deps         - Install system dependencies for CI"
+	@echo "  make ci-install      - Install Python dependencies for CI"
+	@echo "  make ci-setup-db     - Setup database for CI"
+	@echo ""
 	@echo "Docker Compose Operations:"
 	@echo "  make compose-build   - Build all services with docker-compose"
 	@echo "  make start-db        - Start only the database service"
@@ -88,14 +97,16 @@ help:
 setup:
 	@echo "Setting up virtual environment..."
 	$(PYTHON) -m venv $(VENV)
+	@echo "Upgrading pip..."
 	$(ACTIVATE) && $(PIP) install --upgrade pip
-	$(ACTIVATE) && $(PIP) install -r requirements.txt
+	@echo "Installing dependencies..."
+	$(ACTIVATE) && $(PIP) install -r requirements-dev.txt
 	@echo "Setup complete! Activate with: source $(VENV)/bin/activate"
 
 # Install dependencies
 .PHONY: install
 install:
-	$(ACTIVATE) && $(PIP) install -r requirements.txt
+	$(ACTIVATE) && $(PIP) install -r requirements-dev.txt
 
 # Run the Flask application
 .PHONY: run
@@ -291,6 +302,21 @@ deploy: docker-build docker-push ## Build and push to registry
 .PHONY: all
 all: lint test docker-build ## Run all checks and build
 
+# CI/CD targets
+.PHONY: ci-deps
+ci-deps: ## Install system dependencies for CI environment
+	sudo apt-get update
+	sudo apt-get install -y postgresql-client libpq-dev gcc python3-dev
+
+.PHONY: ci-install
+ci-install: ## Install CI dependencies (uses requirements.txt instead of requirements-dev.txt)
+	$(PYTHON) -m pip install --upgrade pip
+	$(PYTHON) -m pip install -r requirements.txt
+
+.PHONY: ci-setup-db
+ci-setup-db: ## Setup database for CI environment
+	$(PYTHON) migrate.py
+
 # Docker Compose targets
 .PHONY: compose-build
 compose-build: ## Build all services with docker-compose
@@ -311,6 +337,13 @@ start-db: ## Start only the database service
 stop-db: ## Stop the database service
 	docker-compose stop postgres
 
+.PHONY: start-nginx
+start-nginx: ## Start the Nginx service
+	@echo "Starting Nginx service..."
+	docker-compose up -d nginx
+	@echo "Nginx started!"	
+
+
 .PHONY: run-migrations
 run-migrations: ## Run database migrations
 	@echo "Running database migrations..."
@@ -330,6 +363,7 @@ start-api: start-db run-migrations build-api ## Start the complete application (
 	@echo "Starting API service..."
 	docker-compose up -d api
 	@echo "Application started! API available at http://localhost:5000"
+	$(MAKE) start-nginx
 
 .PHONY: start-all
 start-all: start-api ## Alias for start-api (starts everything)
@@ -378,6 +412,11 @@ clean-compose: ## Clean up docker-compose resources
 	docker-compose down -v --remove-orphans
 	docker-compose rm -f
 	docker volume prune -f
+
+.PHONY: compose-push
+compose-push: ## Push all services to Docker Hub
+	@echo "Pushing API image to Docker Hub..."
+	docker-compose push api
 
 .PHONY: dev-setup
 dev-setup: ## Complete development setup

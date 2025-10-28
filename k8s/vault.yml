@@ -1,0 +1,234 @@
+---
+# 1. NAMESPACE - For Vault deployment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+  labels:
+    name: vault
+
+---
+# 2. SERVICE ACCOUNT - For Vault pods
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+
+---
+# 3. CONFIGMAP - Vault configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: vault
+data:
+  vault.hcl: |
+    ui = true
+    
+    listener "tcp" {
+      address = "0.0.0.0:8300"
+      tls_disable = 1
+    }
+    
+    storage "file" {
+      path = "/vault/data"
+    }
+    
+    # Disable mlock to work in Kubernetes
+    disable_mlock = true
+
+---
+# 4. PERSISTENT VOLUME CLAIM - For Vault data storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-data
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# 5. DEPLOYMENT - Vault server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      serviceAccountName: vault
+      # Deploy on nodes labeled with type=infrastructure
+      nodeSelector:
+        type: infrastructure
+      containers:
+      - name: vault
+        image: hashicorp/vault:1.15.4
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Kill any zombie processes before starting
+          pkill -9 vault 2>/dev/null || true
+          # Start Vault server
+          vault server -config=/vault/config/vault.hcl
+        env:
+        - name: VAULT_ADDR
+          value: "http://127.0.0.1:8300"
+        - name: VAULT_API_ADDR
+          value: "http://vault.vault.svc.cluster.local:8300"
+        - name: SKIP_CHOWN
+          value: "true"
+        - name: SKIP_SETCAP
+          value: "true"
+        ports:
+        - containerPort: 8300
+          name: http
+          protocol: TCP
+        - containerPort: 8201
+          name: internal
+          protocol: TCP
+        # Lifecycle hooks for graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                # Gracefully shutdown Vault
+                kill -TERM $(pidof vault) 2>/dev/null || true
+                sleep 5
+        volumeMounts:
+        - name: vault-config
+          mountPath: /vault/config
+        - name: vault-data
+          mountPath: /vault/data
+        # Startup probe - give Vault time to start before other probes
+        startupProbe:
+          httpGet:
+            path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
+            port: 8300
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30  # 30 * 5 = 150 seconds to start
+        # Readiness probe - don't send traffic if not ready
+        readinessProbe:
+          httpGet:
+            path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
+            port: 8300
+            scheme: HTTP
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        # Liveness probe - restart if dead (but allow sealed/uninitialized states)
+        livenessProbe:
+          httpGet:
+            path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
+            port: 8300
+            scheme: HTTP
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        # Resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          capabilities:
+            add:
+            - IPC_LOCK
+      volumes:
+      - name: vault-config
+        configMap:
+          name: vault-config
+      - name: vault-data
+        persistentVolumeClaim:
+          claimName: vault-data
+
+---
+# 6. SERVICE - Expose Vault within the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  type: ClusterIP
+  selector:
+    app: vault
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8300
+    targetPort: 8300
+  - name: internal
+    protocol: TCP
+    port: 8201
+    targetPort: 8201
+
+---
+# 7. CLUSTERROLE - Permissions for Vault to work with Kubernetes auth
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vault-auth
+  labels:
+    app: vault
+rules:
+- apiGroups: [""]
+  resources:
+  - serviceaccounts
+  - serviceaccounts/token
+  verbs:
+  - get
+  - list
+- apiGroups: [""]
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+
+---
+# 8. CLUSTERROLEBINDING - Bind ClusterRole to ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-auth-binding
+  labels:
+    app: vault
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vault-auth
+subjects:
+- kind: ServiceAccount
+  name: vault
+  namespace: vault

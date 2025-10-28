@@ -1,0 +1,113 @@
+name: CI Pipeline
+
+# Trigger the workflow on push and pull requests to main/actions branches
+# Only when code files are modified (not docs, configs, etc.)
+on:
+  push:
+    branches: [ main]
+    paths:
+      - '**.py'           # Python files
+      - 'requirements*.txt' # Requirements files
+      - 'Dockerfile'      # Docker configuration
+      - 'docker-compose.yml'
+      - 'Makefile'        # Build configuration
+      - '.github/workflows/**' # Workflow changes
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.py'
+      - 'requirements*.txt'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'Makefile'
+      - '.github/workflows/**'
+  
+  # Allow manual triggering of the workflow
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: false
+        default: 'development'
+        type: choice
+        options:
+        - development
+        - staging
+        - production
+
+env:
+  # Docker registry configuration - aligned with Makefile
+  REGISTRY: rohannayar
+  IMAGE_NAME: rohan-rest-app
+  
+jobs:
+  ci:
+    name: Build, Test, and Deploy
+    runs-on: self-hosted  # Use self-hosted runner
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    # Stage 1: Build API (Setup environment)
+    - name: Build API - Setup Environment
+      run: |
+        echo "🏗️ Building API environment..."
+        # Install system dependencies if needed
+        make setup
+        
+    - name: Build Docker Image
+      run: |
+        echo "🐳 Building Docker image..."
+        make docker-build
+      
+    # Stage 2: Run Tests
+    - name: Run Tests
+      run: |
+        echo "🧪 Running tests..."
+        make test
+        
+    - name: Run Tests with Coverage
+      run: |
+        echo "📊 Running tests with coverage..."
+        make test-cov
+        
+    # Stage 3: Perform Code Linting
+    - name: Code Linting
+      run: |
+        echo "🔍 Performing code linting..."
+        make lint
+        
+    - name: Code Formatting Check
+      run: |
+        echo "✨ Checking code formatting..."
+        source venv/bin/activate
+        black --check *.py tests/ || (echo "Code formatting check failed. Run 'make format' to fix." && exit 1)
+        
+    # Docker Hub Login
+    - name: Login to Docker Hub
+      if: success()  # Only login if previous steps succeeded
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Docker Push using Make
+      if: success()  # Only push if login succeeded
+      run: |
+        echo "📤 Pushing Docker image..."
+        make docker-tag
+        make docker-push
+    
+    - name: Post-build cleanup
+      if: always()
+      run: |
+        echo "🧹 Cleaning up..."
+        docker system prune -f || true
+        
+    - name: Deployment Summary
+      if: success()
+      run: |
+        echo "✅ CI Pipeline completed successfully!"
+        echo "🏷️ Image pushed: ${REGISTRY}/${IMAGE_NAME}:$(git rev-parse --short HEAD)"
+        echo "📍 Registry: Docker Hub"

@@ -230,7 +230,7 @@ app = create_app()
 if __name__ == "__main__":
     # Note: Database tables are created via migrations (migrate.py)
     # No need to create tables here since we use PostgreSQL with proper migrations
-    
+
     # Run the application
     host = app.config["HOST"]
     port = app.config["PORT"]

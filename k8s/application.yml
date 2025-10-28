@@ -1,0 +1,183 @@
+---
+# 1. NAMESPACE - Logical isolation for the application
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: students-api
+  labels:
+    name: students-api
+
+---
+# 2. CONFIGMAP - Non-sensitive application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: students-api
+data:
+  FLASK_ENV: "production"
+  HOST: "0.0.0.0"
+  PORT: "5000"
+  API_VERSION: "v1"
+  # Database connection details (non-sensitive)
+  DB_HOST: "postgres"              # PostgreSQL service name
+  DB_PORT: "5432"
+  DB_NAME: "students_db"
+
+---
+# 3. SECRET - Sensitive database credentials
+# This will be managed by External Secrets Operator in later steps
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: students-api
+type: Opaque
+stringData:
+  username: "postgres"
+  password: "postgres123"  # Will be replaced by ESO
+
+---
+# 4. DEPLOYMENT - Application deployment with init containers
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rohan-rest-api
+  namespace: students-api
+  labels:
+    app: rohan-rest-api
+    component: application
+spec:
+  replicas: 2  # Run 2 replicas for high availability
+  selector:
+    matchLabels:
+      app: rohan-rest-api
+  template:
+    metadata:
+      labels:
+        app: rohan-rest-api
+        component: application
+    spec:
+      # Deploy on nodes labeled with type=application
+      nodeSelector:
+        type: application
+      
+      # INIT CONTAINERS - Run before the main application starts
+      initContainers:
+      # Init Container 1: Wait for PostgreSQL to be ready
+      - name: wait-for-db
+        image: busybox:1.36
+        command: 
+        - sh
+        - -c
+        - |
+          echo "Waiting for PostgreSQL to be ready..."
+          until nc -z postgres 5432; do
+            echo "PostgreSQL is not ready yet... waiting"
+            sleep 2
+          done
+          echo "✅ PostgreSQL is ready!"
+      
+      # Init Container 2: Run database migrations
+      - name: db-migrations
+        image: rohan-rest-app:622de0e
+        imagePullPolicy: IfNotPresent
+        command:
+        - python
+        - migrate.py
+        # Load config from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: app-config
+        env:
+        # Load credentials from Secret
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        # Build DATABASE_URL from environment variables
+        - name: DATABASE_URL
+          value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+      
+      # MAIN APPLICATION CONTAINER
+      containers:
+      - name: rohan-rest-api
+        image: rohan-rest-app:622de0e
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        # Load config from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: app-config
+        env:
+        # Load credentials from Secret
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        # Build DATABASE_URL
+        - name: DATABASE_URL
+          value: "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+        
+        # LIVENESS PROBE - Restart pod if this fails
+        livenessProbe:
+          httpGet:
+            path: /healthcheck
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # READINESS PROBE - Don't send traffic if this fails
+        readinessProbe:
+          httpGet:
+            path: /healthcheck
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # RESOURCE LIMITS
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+# 5. SERVICE - Expose the application within the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: rohan-rest-api-service
+  namespace: students-api
+  labels:
+    app: rohan-rest-api
+spec:
+  type: ClusterIP  # Internal cluster access only
+  selector:
+    app: rohan-rest-api
+  ports:
+  - protocol: TCP
+    port: 5000
+    targetPort: 5000
+    name: http
