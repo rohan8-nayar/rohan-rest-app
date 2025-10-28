@@ -69,21 +69,26 @@ echo ""
 # Check if Vault process is actually running
 VAULT_POD=$(kubectl get pod -n vault -l app=vault -o jsonpath='{.items[0].metadata.name}')
 
-# Try to get Vault status (will return exit code 2 for uninitialized, which is fine)
-if kubectl exec -n vault "$VAULT_POD" -- vault status &>/dev/null; then
-    echo -e "${GREEN}✅ Vault is running and initialized${NC}"
-elif kubectl exec -n vault "$VAULT_POD" -- vault status 2>&1 | grep -q "not initialized"; then
-    echo -e "${GREEN}✅ Vault is running (not initialized yet - this is normal)${NC}"
+# Check Vault status (exit code 2 = sealed/uninitialized, which is fine)
+VAULT_STATUS_OUTPUT=$(kubectl exec -n vault "$VAULT_POD" -- vault status 2>&1 || true)
+
+if echo "$VAULT_STATUS_OUTPUT" | grep -q "not initialized\|Sealed.*true"; then
+    echo -e "${GREEN}✅ Vault is running (uninitialized/sealed - ready for setup)${NC}"
+elif echo "$VAULT_STATUS_OUTPUT" | grep -q "Sealed.*false"; then
+    echo -e "${GREEN}✅ Vault is running and unsealed${NC}"
 else
-    echo -e "${YELLOW}⚠️  Vault process may not be running properly${NC}"
-    echo "Checking logs..."
-    kubectl logs -n vault "$VAULT_POD" --tail=30
-    echo ""
-    
-    # Check if it's the port binding issue
-    if kubectl logs -n vault "$VAULT_POD" --tail=20 | grep -q "address already in use"; then
-        echo -e "${RED}Port binding issue detected. Run: bash fix-vault.sh${NC}"
+    # Check recent logs for actual errors
+    RECENT_LOGS=$(kubectl logs -n vault "$VAULT_POD" --tail=5 2>&1)
+    if echo "$RECENT_LOGS" | grep -q "address already in use"; then
+        echo -e "${RED}❌ Port binding issue detected. Run: bash fix-vault.sh${NC}"
         exit 1
+    elif echo "$RECENT_LOGS" | grep -q "security barrier not initialized"; then
+        echo -e "${GREEN}✅ Vault is running (waiting for initialization - this is normal)${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Could not determine Vault status, but continuing...${NC}"
+        echo "Recent logs:"
+        echo "$RECENT_LOGS"
+        echo ""
     fi
 fi
 
