@@ -1,0 +1,302 @@
+---
+# 1. NAMESPACE - For External Secrets Operator
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    name: external-secrets
+
+---
+# 2. SERVICE ACCOUNT - For ESO
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+  labels:
+    app: external-secrets
+
+---
+# 3. CLUSTERROLE - Permissions for ESO to manage secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-secrets-controller
+  labels:
+    app: external-secrets
+rules:
+- apiGroups: [""]
+  resources:
+  - secrets
+  - configmaps
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups: [""]
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups: ["external-secrets.io"]
+  resources:
+  - externalsecrets
+  - secretstores
+  - clustersecretstores
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups: ["external-secrets.io"]
+  resources:
+  - externalsecrets/status
+  - externalsecrets/finalizers
+  - secretstores/status
+  - clustersecretstores/status
+  verbs:
+  - get
+  - update
+  - patch
+
+---
+# 4. CLUSTERROLEBINDING - Bind ClusterRole to ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-secrets-controller
+  labels:
+    app: external-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-secrets-controller
+subjects:
+- kind: ServiceAccount
+  name: external-secrets
+  namespace: external-secrets
+
+---
+# 5. DEPLOYMENT - External Secrets Operator controller
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+  labels:
+    app: external-secrets
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: external-secrets
+  template:
+    metadata:
+      labels:
+        app: external-secrets
+    spec:
+      serviceAccountName: external-secrets
+      # Deploy on nodes labeled with type=infrastructure
+      nodeSelector:
+        type: infrastructure
+      containers:
+      - name: external-secrets
+        image: ghcr.io/external-secrets/external-secrets:v0.9.11
+        imagePullPolicy: IfNotPresent
+        args:
+        - --concurrent=1
+        - --metrics-addr=:8080
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        # Liveness probe
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+        # Readiness probe
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+        # Resource limits
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+# 6. SERVICE - Metrics endpoint for ESO
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+  labels:
+    app: external-secrets
+spec:
+  type: ClusterIP
+  selector:
+    app: external-secrets
+  ports:
+  - name: metrics
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
+
+---
+# 7. CRD - ExternalSecret custom resource definition
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: externalsecrets.external-secrets.io
+  labels:
+    app: external-secrets
+spec:
+  group: external-secrets.io
+  names:
+    kind: ExternalSecret
+    listKind: ExternalSecretList
+    plural: externalsecrets
+    singular: externalsecret
+    shortNames:
+    - es
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              secretStoreRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  kind:
+                    type: string
+              target:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  creationPolicy:
+                    type: string
+              refreshInterval:
+                type: string
+              data:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    secretKey:
+                      type: string
+                    remoteRef:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                        property:
+                          type: string
+          status:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+    subresources:
+      status: {}
+
+---
+# 8. CRD - SecretStore custom resource definition
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: secretstores.external-secrets.io
+  labels:
+    app: external-secrets
+spec:
+  group: external-secrets.io
+  names:
+    kind: SecretStore
+    listKind: SecretStoreList
+    plural: secretstores
+    singular: secretstore
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+    subresources:
+      status: {}
+
+---
+# 9. CRD - ClusterSecretStore custom resource definition
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clustersecretstores.external-secrets.io
+  labels:
+    app: external-secrets
+spec:
+  group: external-secrets.io
+  names:
+    kind: ClusterSecretStore
+    listKind: ClusterSecretStoreList
+    plural: clustersecretstores
+    singular: clustersecretstore
+  scope: Cluster
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+    subresources:
+      status: {}

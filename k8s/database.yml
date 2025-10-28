@@ -1,0 +1,183 @@
+---
+# 1. CONFIGMAP - Environment variables for PostgreSQL
+# This stores non-sensitive configuration data
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: students-api  # Deploy in students-api namespace
+data:
+  POSTGRES_DB: "students_db"      # Database name
+  POSTGRES_USER: "postgres"        # Database user
+  DB_HOST: "postgres"              # Service name (used by application)
+  DB_PORT: "5432"                  # PostgreSQL default port
+
+---
+# 2. SECRET - Sensitive data (password)
+# In production, this will be managed by External Secrets Operator
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: students-api
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "postgres123"  # This will be replaced by ESO later
+
+---
+# 3. PERSISTENTVOLUMECLAIM - Storage for database data
+# This ensures data persists even if the pod restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: students-api
+spec:
+  accessModes:
+    - ReadWriteOnce  # Only one node can mount this volume
+  resources:
+    requests:
+      storage: 5Gi   # Request 5GB of storage
+
+---
+# 4. CONFIGMAP - Database initialization scripts
+# This contains the SQL to create tables and indexes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: students-api
+data:
+  01-init.sql: |
+    -- Create students table
+    CREATE TABLE IF NOT EXISTS students (
+        id SERIAL PRIMARY KEY,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        age INTEGER NOT NULL CHECK (age > 0 AND age < 150),
+        grade VARCHAR(10),
+        enrollment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create index on email for faster lookups
+    CREATE INDEX IF NOT EXISTS idx_students_email ON students(email);
+
+    -- Create trigger to auto-update updated_at timestamp
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END;
+    $$ language 'plpgsql';
+
+    CREATE TRIGGER update_students_updated_at 
+    BEFORE UPDATE ON students 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+---
+# 5. DEPLOYMENT - PostgreSQL database
+# This manages the PostgreSQL pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: students-api
+  labels:
+    app: postgres
+    component: database
+spec:
+  replicas: 1  # Only 1 replica for database (stateful)
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+    spec:
+      # Deploy on nodes labeled with type=database
+      nodeSelector:
+        type: database
+      containers:
+      - name: postgres
+        image: postgres:15-alpine  # Lightweight Alpine-based image
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+          name: postgres
+        # Load environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: postgres-config
+        # Load password from Secret
+        - secretRef:
+            name: postgres-secret
+        env:
+        # PostgreSQL stores data in this directory
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        # Mount persistent storage
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        # Mount init scripts (runs on first startup)
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        # Resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-data
+      - name: init-scripts
+        configMap:
+          name: postgres-init-scripts
+
+---
+# 6. SERVICE - Expose PostgreSQL within the cluster
+# This creates a stable DNS name: postgres.students-api.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: students-api
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP  # Only accessible within the cluster
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: postgres
