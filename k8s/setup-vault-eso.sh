@@ -59,7 +59,7 @@ if ! kubectl wait --for=condition=ready pod -l app=vault -n vault --timeout=300s
     echo -e "${RED}❌ Vault pod failed to become ready${NC}"
     echo ""
     echo "Common issues:"
-    echo "1. Port 8200 already in use - Run: bash fix-vault.sh"
+    echo "1. Port 8300 already in use - Run: bash fix-vault.sh"
     echo "2. Check logs: kubectl logs -n vault -l app=vault"
     exit 1
 fi

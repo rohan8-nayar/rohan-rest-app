@@ -29,7 +29,7 @@ data:
     ui = true
     
     listener "tcp" {
-      address = "0.0.0.0:8200"
+      address = "0.0.0.0:8300"
       tls_disable = 1
     }
     
@@ -93,15 +93,15 @@ spec:
           vault server -config=/vault/config/vault.hcl
         env:
         - name: VAULT_ADDR
-          value: "http://127.0.0.1:8200"
+          value: "http://127.0.0.1:8300"
         - name: VAULT_API_ADDR
-          value: "http://vault.vault.svc.cluster.local:8200"
+          value: "http://vault.vault.svc.cluster.local:8300"
         - name: SKIP_CHOWN
           value: "true"
         - name: SKIP_SETCAP
           value: "true"
         ports:
-        - containerPort: 8200
+        - containerPort: 8300
           name: http
           protocol: TCP
         - containerPort: 8201
@@ -127,7 +127,7 @@ spec:
         startupProbe:
           httpGet:
             path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
-            port: 8200
+            port: 8300
             scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 5
@@ -137,7 +137,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
-            port: 8200
+            port: 8300
             scheme: HTTP
           periodSeconds: 5
           timeoutSeconds: 3
@@ -146,7 +146,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /v1/sys/health?standbyok=true&uninitcode=200&sealedcode=200
-            port: 8200
+            port: 8300
             scheme: HTTP
           periodSeconds: 10
           timeoutSeconds: 5
@@ -187,8 +187,8 @@ spec:
   ports:
   - name: http
     protocol: TCP
-    port: 8200
-    targetPort: 8200
+    port: 8300
+    targetPort: 8300
   - name: internal
     protocol: TCP
     port: 8201
