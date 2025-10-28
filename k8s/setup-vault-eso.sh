@@ -68,13 +68,23 @@ echo ""
 
 # Check if Vault process is actually running
 VAULT_POD=$(kubectl get pod -n vault -l app=vault -o jsonpath='{.items[0].metadata.name}')
-if ! kubectl exec -n vault "$VAULT_POD" -- vault status &>/dev/null; then
+
+# Try to get Vault status (will return exit code 2 for uninitialized, which is fine)
+if kubectl exec -n vault "$VAULT_POD" -- vault status &>/dev/null; then
+    echo -e "${GREEN}✅ Vault is running and initialized${NC}"
+elif kubectl exec -n vault "$VAULT_POD" -- vault status 2>&1 | grep -q "not initialized"; then
+    echo -e "${GREEN}✅ Vault is running (not initialized yet - this is normal)${NC}"
+else
     echo -e "${YELLOW}⚠️  Vault process may not be running properly${NC}"
     echo "Checking logs..."
-    kubectl logs -n vault "$VAULT_POD" --tail=20
+    kubectl logs -n vault "$VAULT_POD" --tail=30
     echo ""
-    echo -e "${RED}If you see 'address already in use', run: bash fix-vault.sh${NC}"
-    exit 1
+    
+    # Check if it's the port binding issue
+    if kubectl logs -n vault "$VAULT_POD" --tail=20 | grep -q "address already in use"; then
+        echo -e "${RED}Port binding issue detected. Run: bash fix-vault.sh${NC}"
+        exit 1
+    fi
 fi
 
 # Step 3: Initialize Vault
